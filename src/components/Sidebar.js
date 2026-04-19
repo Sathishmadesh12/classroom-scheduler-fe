@@ -19,6 +19,7 @@ export default function Sidebar({ activePage, setActivePage }) {
     { icon: "📅", label: "My Timetable", page: "mytimetable", roles: ['faculty'] },
     { icon: "📅", label: "Faculty Timetables", page: "mytimetable", roles: ['admin'] },
     { icon: "📖", label: "Notes", page: "notes", roles: ['admin', 'faculty', 'student'] },
+    { icon: "📋", label: "Attendance", page: "attendance", roles: ['admin', 'faculty'] },
   ].filter(item => item.roles.includes(user?.role));
 
   return (

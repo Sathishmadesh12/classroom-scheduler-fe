@@ -10,6 +10,7 @@ import Subjects from './pages/Subjects';
 import Timetable from './pages/Timetable';
 import MyTimetable from './pages/MyTimetable';
 import Notes from './pages/Notes';
+import Attendance from './pages/Attendance';
 import './index.css';
 
 const pages = {
@@ -21,6 +22,7 @@ const pages = {
   timetable: Timetable,
   mytimetable: MyTimetable,
   notes: Notes,
+  attendance: Attendance,
 };
 
 function AppInner() {
