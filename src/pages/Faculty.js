@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import API from "../utils/api";
 import { useConfirm } from "../components/ConfirmDialog";
 
@@ -14,6 +14,14 @@ export default function Faculty() {
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { confirm, ConfirmDialogUI } = useConfirm();
+
+  // Import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importError, setImportError] = useState("");
+  const fileInputRef = useRef(null);
 
   const fetchFaculty = () => {
     setLoading(true);
@@ -61,6 +69,38 @@ export default function Faculty() {
     fetchFaculty();
   };
 
+  // ── Import handlers ──────────────────────────────────────────────────────────
+  const openImport = () => {
+    setImportFile(null);
+    setImportResult(null);
+    setImportError("");
+    setShowImportModal(true);
+  };
+
+  const handleImport = async () => {
+    if (!importFile) { setImportError("Please select a CSV file"); return; }
+    setImporting(true); setImportError(""); setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      const res = await API.post("/users/import-faculty", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setImportResult(res.data);
+      fetchFaculty();
+    } catch (err) {
+      setImportError(err.response?.data?.message || "Import failed");
+    } finally { setImporting(false); }
+  };
+
+  const downloadTemplate = () => {
+    const csv = "name,email,department,phone,password\nJohn Doe,john@example.com,Computer Science,9876543210,\nJane Smith,jane@example.com,Mathematics,9876543211,";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "faculty_import_template.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       {ConfirmDialogUI}
@@ -72,7 +112,10 @@ export default function Faculty() {
         <div className="card">
           <div className="section-header">
             <h3>All Faculty ({users.length})</h3>
-            <button className="btn btn-primary" onClick={openAdd}>+ Add Faculty</button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-ghost" onClick={openImport}>📥 Import CSV</button>
+              <button className="btn btn-primary" onClick={openAdd}>+ Add Faculty</button>
+            </div>
           </div>
           {loading ? <div className="loading">Loading...</div> : users.length === 0 ? (
             <div className="empty-state"><div className="icon">👨‍🏫</div><p>No faculty found. Add your first faculty member.</p></div>
@@ -143,6 +186,88 @@ export default function Faculty() {
                 <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving..." : "Save Faculty"}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="modal-overlay" onClick={() => { if (!importing) setShowImportModal(false); }}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📥 Import Faculty via CSV</h3>
+              <button className="modal-close" onClick={() => setShowImportModal(false)} disabled={importing}>✕</button>
+            </div>
+
+            {!importResult ? (
+              <>
+                <div style={{ marginBottom: 16, padding: "12px 14px", background: "var(--bg2, #f8f9fa)", borderRadius: 8, fontSize: 13, color: "var(--text2)" }}>
+                  <strong>CSV Format:</strong> name, email, department, phone, password
+                  <br /><small>Password column optional — auto-generated if blank. Welcome email sent automatically.</small>
+                  <br />
+                  <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={downloadTemplate}>⬇️ Download Template</button>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Select CSV File *</label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="form-control"
+                    onChange={e => setImportFile(e.target.files[0])}
+                  />
+                  {importFile && <small style={{ color: "var(--text2)", marginTop: 4, display: "block" }}>Selected: {importFile.name}</small>}
+                </div>
+
+                {importError && <div className="alert alert-error">{importError}</div>}
+
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
+                  <button className="btn btn-ghost" onClick={() => setShowImportModal(false)} disabled={importing}>Cancel</button>
+                  <button className="btn btn-primary" onClick={handleImport} disabled={importing || !importFile}>
+                    {importing ? "Importing..." : "Import Faculty"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div>
+                <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                  <div style={{ flex: 1, padding: "12px", background: "#d1fae5", borderRadius: 8, textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#065f46" }}>{importResult.summary.created}</div>
+                    <div style={{ fontSize: 12, color: "#065f46" }}>Created</div>
+                  </div>
+                  <div style={{ flex: 1, padding: "12px", background: "#fef3c7", borderRadius: 8, textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#92400e" }}>{importResult.summary.skipped}</div>
+                    <div style={{ fontSize: 12, color: "#92400e" }}>Skipped</div>
+                  </div>
+                  <div style={{ flex: 1, padding: "12px", background: "#fee2e2", borderRadius: 8, textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#991b1b" }}>{importResult.summary.errors}</div>
+                    <div style={{ fontSize: 12, color: "#991b1b" }}>Errors</div>
+                  </div>
+                </div>
+
+                {importResult.details.skipped.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <strong style={{ fontSize: 13 }}>Skipped (already exist):</strong>
+                    {importResult.details.skipped.map((s, i) => (
+                      <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>• {s.email}</div>
+                    ))}
+                  </div>
+                )}
+
+                {importResult.details.errors.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <strong style={{ fontSize: 13 }}>Errors:</strong>
+                    {importResult.details.errors.map((e, i) => (
+                      <div key={i} style={{ fontSize: 12, color: "#ef4444", marginTop: 2 }}>• {e.email || "Row"}: {e.reason}</div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+                  <button className="btn btn-primary" onClick={() => setShowImportModal(false)}>Done</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
